@@ -1,5 +1,6 @@
 const http = require("http");
 const TodoModel = require("./todoModel");
+const { error } = require("console");
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json");
@@ -35,6 +36,31 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "無效數據" }));
+      }
+    });
+    return;
+  } else if (req.url.startsWith("/todos/") && req.method === "PUT") {
+    const id = req.url.split("/")[2];
+    let body = "";
+
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", async () => {
+      try {
+        const { title, is_completed } = JSON.parse(body);
+        const updateTodo = await TodoModel.update(id, title, is_completed);
+
+        if (!updateTodo) {
+          res.statusCode = 404;
+          return res.end(JSON.stringify({ error: "找不到訪筆數據" }));
+        }
+        res.statusCode = 200;
+        return res.end(JSON.stringify(updateTodo));
+      } catch (err) {
+        console.error("具體錯誤信息", err);
+        res.statusCode = 500;
+        return res.end(JSON.stringify({ error: "更新失敗" }));
       }
     });
     return;
