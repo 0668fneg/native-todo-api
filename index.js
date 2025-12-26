@@ -113,10 +113,8 @@ const server = http.createServer(async (req, res) => {
         res.statusCode = 404;
         return res.end(JSON.stringify({ error: "找不到該筆數據，無法刪除" }));
       }
-      res.statusCode = 200;
-      return res.end(
-        JSON.stringify({ message: "刪除成功", data: deletedTodo })
-      );
+      res.statusCode = 204;
+      return res.end();
     } catch (err) {
       res.statusCode = 500;
       return res.end(JSON.stringify({ error: "刪除失敗" }));
