@@ -15,6 +15,21 @@ const server = http.createServer(async (req, res) => {
       res.statusCode = 500;
       return res.end(JSON.stringify({ error: "數據庫讀取失敗" }));
     }
+  } else if (req.url.startsWith("/todos/") && req.method === "GET") {
+    const id = req.url.split("/")[2];
+
+    try {
+      const todo = await TodoModel.get(id);
+      if (!todo) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "找不到該筆數據" }));
+      }
+      res.statusCode = 200;
+      return res.end(JSON.stringify(todo));
+    } catch (err) {
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: "查詢失敗" }));
+    }
   } else if (req.url === "/todos" && req.method === "POST") {
     let body = "";
     req.on("data", (chunk) => {

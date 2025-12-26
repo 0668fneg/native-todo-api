@@ -7,6 +7,12 @@ const TodoModel = {
     return result.rows;
   },
 
+  async get(id) {
+    const sql = "SELECT * FROM todos WHERE id = $1 ";
+    const result = await pool.query(sql, [id]);
+    return result.rows[0];
+  },
+
   async create(title) {
     const sql = "INSERT INTO todos (title) VALUES ($1) RETURNING *";
     const result = await pool.query(sql, [title]);
