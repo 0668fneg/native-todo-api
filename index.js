@@ -64,6 +64,24 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  } else if (req.url.startsWith("/todos/") && req.method === "DELETE") {
+    const id = req.url.split("/")[2];
+
+    try {
+      const deletedTodo = await TodoModel.delete(id);
+
+      if (!deletedTodo) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "找不到該筆數據，無法刪除" }));
+      }
+      res.statusCode = 200;
+      return res.end(
+        JSON.stringify({ message: "刪除成功", data: deletedTodo })
+      );
+    } catch (err) {
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: "刪除失敗" }));
+    }
   }
 
   res.statusCode = 404;

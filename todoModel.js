@@ -19,6 +19,12 @@ const TodoModel = {
     const result = await pool.query(sql, [title, is_completed, id]);
     return result.rows[0];
   },
+
+  async delete(id) {
+    const sql = "DELETE FROM todos WHERE id = $1 RETURNING *";
+    const result = await pool.query(sql, [id]);
+    return result.rows[0];
+  },
 };
 
 module.exports = TodoModel;
