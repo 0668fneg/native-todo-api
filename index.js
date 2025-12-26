@@ -3,6 +3,17 @@ const TodoModel = require("./todoModel");
 const { error } = require("console");
 
 const server = http.createServer(async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS"
+  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    return res.end();
+  }
   res.setHeader("Content-Type", "application/json");
 
   if (req.url === "/todos" && req.method === "GET") {
@@ -17,6 +28,10 @@ const server = http.createServer(async (req, res) => {
     }
   } else if (req.url.startsWith("/todos/") && req.method === "GET") {
     const id = req.url.split("/")[2];
+    if (isNaN(id)) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
+    }
 
     try {
       const todo = await TodoModel.get(id);
@@ -56,6 +71,11 @@ const server = http.createServer(async (req, res) => {
     return;
   } else if (req.url.startsWith("/todos/") && req.method === "PUT") {
     const id = req.url.split("/")[2];
+    if (isNaN(id)) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
+    }
+
     let body = "";
 
     req.on("data", (chunk) => {
@@ -68,7 +88,7 @@ const server = http.createServer(async (req, res) => {
 
         if (!updateTodo) {
           res.statusCode = 404;
-          return res.end(JSON.stringify({ error: "找不到訪筆數據" }));
+          return res.end(JSON.stringify({ error: "找不到該筆數據" }));
         }
         res.statusCode = 200;
         return res.end(JSON.stringify(updateTodo));
@@ -81,6 +101,10 @@ const server = http.createServer(async (req, res) => {
     return;
   } else if (req.url.startsWith("/todos/") && req.method === "DELETE") {
     const id = req.url.split("/")[2];
+    if (isNaN(id)) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
+    }
 
     try {
       const deletedTodo = await TodoModel.delete(id);
