@@ -2,7 +2,7 @@ const pool = require("./db");
 
 const TodoModel = {
   async getAll() {
-    const sql = "SELECT * FRON todos ORDER BY created_at DESC";
+    const sql = "SELECT * FROM todos ORDER BY created_at DESC";
     const result = await pool.query(sql);
     return result.rows;
   },
