@@ -1,6 +1,5 @@
 const http = require("http");
 const TodoModel = require("./todoModel");
-const { error } = require("console");
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
