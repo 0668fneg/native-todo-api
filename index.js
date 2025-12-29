@@ -13,7 +13,7 @@ const server = http.createServer(async (req, res) => {
     res.statusCode = 204;
     return res.end();
   }
-  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   if (req.url === "/todos" && req.method === "GET") {
     try {
