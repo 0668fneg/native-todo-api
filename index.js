@@ -1,5 +1,7 @@
 const http = require("http");
 const TodoModel = require("./todoModel");
+const { error } = require("console");
+const UserModel = require("./userModel");
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -34,6 +36,41 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       res.statusCode = 400;
       return res.end(JSON.stringify({ error: "無效的 JSON 格式" }));
+    }
+
+    // 注冊用戶 POST /register
+    if (req.url === "/register" && req.method === "POST") {
+      const { username, password } = data;
+
+      //1 驗證注冊輸入信息
+      if (!username || !password) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ error: "用戶名和密碼不能爲空" }));
+      }
+
+      try {
+        const existingUser = await UserModel.findByUsername(username);
+        if (existingUser) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ error: "用戶名已被注冊" }));
+        }
+        console.log("---偵錯資訊---");
+        console.log("原始 body 字串:", body);
+        console.log("解析後的username:", username);
+        console.log("解析後的 password:", password);
+        const newUser = await UserModel.create(username, password);
+        res.statusCode = 201;
+        return res.end(
+          JSON.stringify({
+            message: "注冊成功",
+            user: { id: newUser.id, username: newUser.username },
+          })
+        );
+      } catch (err) {
+        console.error("出錯具體原因", err);
+        res.statusCode = 500;
+        return res.end(JSON.stringify({ error: "服務器出錯" }));
+      }
     }
 
     // 查詢所有數據  GET /todos
