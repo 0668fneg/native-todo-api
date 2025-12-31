@@ -7,7 +7,8 @@ const server = http.createServer(async (req, res) => {
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, DELETE, OPTIONS"
   );
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // 授權 X-User-Id
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-User-Id");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   if (req.method === "OPTIONS") {
@@ -22,6 +23,9 @@ const server = http.createServer(async (req, res) => {
   });
 
   req.on("end", async () => {
+    // 從 Header 統一提取 user_id
+    const userIdFromHeader = req.headers["x-user-id"];
+
     let data = {};
     try {
       if (body) {
@@ -34,12 +38,15 @@ const server = http.createServer(async (req, res) => {
 
     // 查詢所有數據  GET /todos
     if (req.url === "/todos" && req.method === "GET") {
+      if (!userIdFromHeader) {
+        res.statusCode = 401;
+        return res.end(JSON.stringify({ error: "未提供 user-id" }));
+      }
       try {
-        const todos = await TodoModel.getAll();
+        const todos = await TodoModel.getAll(userIdFromHeader);
         res.statusCode = 200;
         return res.end(JSON.stringify(todos));
       } catch (err) {
-        console.error("具體錯誤信息", err);
         res.statusCode = 500;
         return res.end(JSON.stringify({ error: "數據庫讀取失敗" }));
       }
@@ -52,11 +59,18 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
       }
 
+      if (!userIdFromHeader) {
+        res.statusCode = 401;
+        return res.end(JSON.stringify({ error: "未提供user-id" }));
+      }
+
       try {
-        const todo = await TodoModel.get(id);
+        const todo = await TodoModel.get(id, userIdFromHeader);
         if (!todo) {
           res.statusCode = 404;
-          return res.end(JSON.stringify({ error: "找不到該筆數據" }));
+          return res.end(
+            JSON.stringify({ error: "找不到該筆數據或用戶資料不對" })
+          );
         }
         res.statusCode = 200;
         return res.end(JSON.stringify(todo));
@@ -67,17 +81,22 @@ const server = http.createServer(async (req, res) => {
 
       // 增加數據 POST /todos
     } else if (req.url === "/todos" && req.method === "POST") {
-      const { title, user_id } = data;
-      if (!title || !user_id) {
+      const { title } = data;
+
+      if (!userIdFromHeader) {
+        res.statusCode = 401;
+        return res.end(JSON.stringify({ error: "未提供user_id" }));
+      }
+      if (!title) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "請提供title" }));
       }
       try {
-        const newTodo = await TodoModel.create(title, user_id);
+        const newTodo = await TodoModel.create(title, userIdFromHeader);
         res.statusCode = 201;
         return res.end(JSON.stringify(newTodo));
       } catch (err) {
-        console.log("具體錯誤信息", err);
+        console.error("具體錯誤信息", err);
         res.statusCode = 500;
         return res.end(JSON.stringify({ error: "新增失敗 " }));
       }
@@ -86,16 +105,31 @@ const server = http.createServer(async (req, res) => {
     // 更新數據 PUT / todos/:id
     else if (req.url.startsWith("/todos/") && req.method === "PUT") {
       const id = req.url.split("/")[2];
+
       if (isNaN(id)) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
       }
+
+      if (!userIdFromHeader) {
+        res.statusCode = 401;
+        return res.end(JSON.stringify({ error: "未提供user_id" }));
+      }
+
       const { title, is_completed } = data;
+
       try {
-        const updateTodo = await TodoModel.update(id, title, is_completed);
+        const updateTodo = await TodoModel.update(
+          id,
+          title,
+          is_completed,
+          userIdFromHeader
+        );
         if (!updateTodo) {
           res.statusCode = 404;
-          return res.end(JSON.stringify({ error: "找不到該筆數據" }));
+          return res.end(
+            JSON.stringify({ error: "找不到該筆數據或者無權限修改" })
+          );
         }
         res.statusCode = 200;
         return res.end(JSON.stringify(updateTodo));
@@ -112,8 +146,13 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
       }
 
+      if (!userIdFromHeader) {
+        res.statusCode = 401;
+        return res.end(JSON.stringify({ error: "未提供user_id" }));
+      }
+
       try {
-        const deletedTodo = await TodoModel.delete(id);
+        const deletedTodo = await TodoModel.delete(id, userIdFromHeader);
 
         if (!deletedTodo) {
           res.statusCode = 404;
@@ -123,6 +162,7 @@ const server = http.createServer(async (req, res) => {
         return res.end();
       } catch (err) {
         res.statusCode = 500;
+        console.error("具體錯誤信息", err);
         return res.end(JSON.stringify({ error: "刪除失敗" }));
       }
     } else {
