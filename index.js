@@ -1,6 +1,5 @@
 const http = require("http");
 const TodoModel = require("./todoModel");
-const { error } = require("console");
 const UserModel = require("./userModel");
 
 const server = http.createServer(async (req, res) => {
@@ -68,6 +67,32 @@ const server = http.createServer(async (req, res) => {
         );
       } catch (err) {
         console.error("出錯具體原因", err);
+        res.statusCode = 500;
+        return res.end(JSON.stringify({ error: "服務器出錯" }));
+      }
+    }
+
+    // 登录 POST /login
+    if (req.url === "/login" && req.method === "POST") {
+      const { username, password } = data;
+
+      if (!username || !password) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ error: "請輸入用戶名和密碼" }));
+      }
+
+      try {
+        const user = await UserModel.findByUsername(username);
+        if (user && user.password === password) {
+          res.statusCode = 200;
+          return res.end(
+            JSON.stringify({ message: "登錄成功", userId: user.id })
+          );
+        } else {
+          res.statusCode = 401;
+          return res.end(JSON.stringify({ error: "用戶名或密碼錯誤" }));
+        }
+      } catch (err) {
         res.statusCode = 500;
         return res.end(JSON.stringify({ error: "服務器出錯" }));
       }
