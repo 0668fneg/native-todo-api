@@ -1,6 +1,7 @@
 const http = require("http");
 const TodoModel = require("./todoModel");
 const UserModel = require("./userModel");
+const { error } = require("console");
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -104,7 +105,16 @@ const server = http.createServer(async (req, res) => {
         res.statusCode = 401;
         return res.end(JSON.stringify({ error: "未提供 user-id" }));
       }
+
       try {
+        // 檢查用戶是否存在
+        const user = await UserModel.findById(userIdFromHeader);
+
+        if (!user) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: "用戶不存在" }));
+        }
+
         const todos = await TodoModel.getAll(userIdFromHeader);
         res.statusCode = 200;
         return res.end(JSON.stringify(todos));
