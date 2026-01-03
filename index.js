@@ -1,7 +1,6 @@
 const http = require("http");
 const TodoModel = require("./todoModel");
 const UserModel = require("./userModel");
-const { error } = require("console");
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -36,6 +35,31 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       res.statusCode = 400;
       return res.end(JSON.stringify({ error: "無效的 JSON 格式" }));
+    }
+
+    //定義公共路由
+    const isPublicRoute =
+      (req.url === "/register" || req.url === "/login") &&
+      req.method === "POST";
+    //檢查 Header 是否提供 ID
+    if (!isPublicRoute) {
+      if (!userIdFromHeader) {
+        res.statusCode = 401;
+        return res.end(JSON.stringify({ error: "未提供 user-id" }));
+      }
+
+      //校驗 ID 是否真實存在數據庫
+      try {
+        const user = await UserModel.findById(userIdFromHeader);
+        if (!user) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: "用戶不存在" }));
+        }
+        req.authenticatedUser = user;
+      } catch (err) {
+        res.statusCode = 500;
+        return res.end(JSON.stringify({ error: "服務器出錯" }));
+      }
     }
 
     // 注冊用戶 POST /register
@@ -101,20 +125,7 @@ const server = http.createServer(async (req, res) => {
 
     // 查詢所有數據  GET /todos
     if (req.url === "/todos" && req.method === "GET") {
-      if (!userIdFromHeader) {
-        res.statusCode = 401;
-        return res.end(JSON.stringify({ error: "未提供 user-id" }));
-      }
-
       try {
-        // 檢查用戶是否存在
-        const user = await UserModel.findById(userIdFromHeader);
-
-        if (!user) {
-          res.statusCode = 403;
-          return res.end(JSON.stringify({ error: "用戶不存在" }));
-        }
-
         const todos = await TodoModel.getAll(userIdFromHeader);
         res.statusCode = 200;
         return res.end(JSON.stringify(todos));
@@ -129,11 +140,6 @@ const server = http.createServer(async (req, res) => {
       if (isNaN(id)) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
-      }
-
-      if (!userIdFromHeader) {
-        res.statusCode = 401;
-        return res.end(JSON.stringify({ error: "未提供user-id" }));
       }
 
       try {
@@ -155,10 +161,6 @@ const server = http.createServer(async (req, res) => {
     } else if (req.url === "/todos" && req.method === "POST") {
       const { title } = data;
 
-      if (!userIdFromHeader) {
-        res.statusCode = 401;
-        return res.end(JSON.stringify({ error: "未提供user_id" }));
-      }
       if (!title) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "請提供title" }));
@@ -181,11 +183,6 @@ const server = http.createServer(async (req, res) => {
       if (isNaN(id)) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
-      }
-
-      if (!userIdFromHeader) {
-        res.statusCode = 401;
-        return res.end(JSON.stringify({ error: "未提供user_id" }));
       }
 
       const { title, is_completed } = data;
@@ -216,11 +213,6 @@ const server = http.createServer(async (req, res) => {
       if (isNaN(id)) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: "無效的ID,必須爲數字" }));
-      }
-
-      if (!userIdFromHeader) {
-        res.statusCode = 401;
-        return res.end(JSON.stringify({ error: "未提供user_id" }));
       }
 
       try {
