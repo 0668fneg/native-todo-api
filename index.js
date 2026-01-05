@@ -225,6 +225,7 @@ const server = http.createServer(async (req, res) => {
         res.statusCode = 500;
         console.error("具體錯誤信息", err);
         console.log("測試中");
+        console.log("測試有衝突代碼，如何解決衝突");
         return res.end(JSON.stringify({ error: "刪除失敗" }));
       }
     } else {
