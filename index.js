@@ -78,10 +78,7 @@ const server = http.createServer(async (req, res) => {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: "用戶名已被注冊" }));
         }
-        console.log("---偵錯資訊---");
-        console.log("原始 body 字串:", body);
-        console.log("解析後的username:", username);
-        console.log("解析後的 password:", password);
+        // 將監聽日志刪除
         const newUser = await UserModel.create(username, password);
         res.statusCode = 201;
         return res.end(
