@@ -26,24 +26,32 @@ const uniqueWithSet = [...new Set(data)];
 
 console.log("使用 Set 去重的結果:", uniqueWithSet);
 
-// 2 深拷貝（工具: typeof, Array.isArray)
-function deepClone(obj) {
-  // 判斷是否爲基本類型，如果不是引用對象或者是null ，可直接返回。
-  if (obj === null || typeof obj !== "object") {
-    return obj;
-  }
+// 加入 map做登記
+function deepClone(obj, map = new WeakMap()) {
+  if (obj === null || typeof obj !== "object") return obj;
 
-  // 初始化回傳值：判斷原數據是數組還是對象
+  //  特權通道：處理 Date 對象
+  if (obj instanceof Date) return new Date(obj);
+
+  //  特權通道：處理 RegExp 對象
+  if (obj instanceof RegExp) return new RegExp(obj);
+
+  //  防止死循環導致棧溢出（記錄已登記過的）
+  if (map.has(obj)) return map.get(obj);
+
+  //  初始化容器
   const copy = Array.isArray(obj) ? [] : {};
 
-  // 遍歷對象：使用for...in 拿到每一個 key
+  map.set(obj, copy);
+
+  //
   for (let key in obj) {
-    // 確保這個 key 是封象自身的，而不是原型鏈上的
-    if (obj.hasOwnProperty(key)) {
-      // 如果裏面還是有對象， 就再進去拷貝多一次
-      copy[key] = deepClone(obj[key]);
+    // 現代化寫法：使用 Object.hasOwn
+    if (Object.hasOwn(obj, key)) {
+      copy[key] = deepClone(obj[key], map);
     }
   }
+
   return copy;
 }
 
@@ -83,16 +91,14 @@ console.log("轉換後的格式:", formattedUsers);
 
 // 4 日期格式化 (工具: getFullYear(), getMoth(), getDate()).
 function formatDate(date) {
-  // 獲取年、月、日
   const year = date.getFullYear();
   // 特殊點，月份 +1，因為 JS 的月份是 0-11
   const month = date.getMonth() + 1;
   const day = date.getDate();
 
-  // 補零邏輯 (數據庫或正式報表中，通常要求統一長度，即 2026-01-06)
-  // 如果小於 10，就在前面加個 "0"
-  const formattedMonth = month < 10 ? `0${month}` : month;
-  const formattedDay = day < 10 ? `0${day}` : day;
+  // 補零邏輯 (padStart()是字符串方法，要先轉換)
+  const formattedMonth = String(month).padStart(2, "0");
+  const formattedDay = String(day).padStart(2, "0");
 
   //  返回最終格式
   return `${year}-${formattedMonth}-${formattedDay}`;
