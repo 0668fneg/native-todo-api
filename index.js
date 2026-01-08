@@ -1,42 +1,55 @@
+// ---第一部分（工具箱）---
 const http = require("http");
 const TodoModel = require("./todoModel");
 const UserModel = require("./userModel");
 
+// 建立服務器，async 代表裏面會用到 await （因爲資料庫讀寫的物件操作是非同步的）
+// req：瀏覽器傳進來的請求（Request)
+// res: 服務器要傳回的響應（Response)
 const server = http.createServer(async (req, res) => {
+  // ---第二部分：CORS與Header設定規則---
+  // 允許任何網域存取（CORS 設定）
   res.setHeader("Access-Control-Allow-Origin", "*");
+  // 允許的請求方法……
   res.setHeader(
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, DELETE, OPTIONS"
   );
-  // 授權 X-User-Id
+  // 允許瀏覽器在 Header 帶入自定義標籤（ 例如：X-User-Id)
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-User-Id");
+  // 規定回傳的內容一律是 JSON 格式，且編碼爲 UTE-8
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
+  // 如果是預檢請求（OPTIONS),直接回復 204 （無內容），這是瀏覽器的安全機制
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     return res.end();
   }
 
-  // 提取 Body 解析邏輯做中間層，避免每個 POST 和 PUT 都寫一次解查邏輯。
+  // ---第三部分：解析 Body 數據---
   let body = "";
+  // 因爲傳輸大資料時會分段，所以要用監聽'data'事件把每一小塊（chunk)拼起來
   req.on("data", (chunk) => {
     body += chunk.toString();
   });
 
+  // 當資料接收完畢，觸發'end'事件，這之後才開始處理業務邏輯
   req.on("end", async () => {
     // 從 Header 統一提取 user_id
     const userIdFromHeader = req.headers["x-user-id"];
 
     let data = {};
     try {
+      // 如果有接收到body，把字串轉成Json物件
       if (body) {
         data = JSON.parse(body);
       }
     } catch (e) {
-      res.statusCode = 400;
+      res.statusCode = 400; // 解析失敗客戶端傳錯格式
       return res.end(JSON.stringify({ error: "無效的 JSON 格式" }));
     }
 
+    // ---第四部分：權限校驗 ---
     //定義公共路由
     const isPublicRoute =
       (req.url === "/register" || req.url === "/login") &&
@@ -62,6 +75,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ---第五部分：路由邏輯---
     // 注冊用戶 POST /register
     if (req.url === "/register" && req.method === "POST") {
       const { username, password } = data;
@@ -78,7 +92,7 @@ const server = http.createServer(async (req, res) => {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: "用戶名已被注冊" }));
         }
-        // 將監聽日志刪除
+
         const newUser = await UserModel.create(username, password);
         res.statusCode = 201;
         return res.end(
