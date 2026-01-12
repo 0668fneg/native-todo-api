@@ -31,7 +31,7 @@ const TodoModel = {
   },
 
   async delete(id, user_id) {
-    const sql = "DELETE FROM todos WHERE id = $1  AND user_id = $2 RETURNING *";
+    const sql = "DELETE FROM todos WHERE id = $1 AND user_id = $2 RETURNING *";
     const result = await pool.query(sql, [id, user_id]);
     return result.rows[0];
   },
