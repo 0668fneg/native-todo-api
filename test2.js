@@ -71,6 +71,16 @@ app.post("/login", async (c) => {
   }
 });
 
+// 登出
+app.post("/logout", (c) => {
+  const sessionId = getCookie(c, "sesssion_id");
+  if (sessionId) {
+    sessionStore.delete(sessionId);
+  }
+  setCookie(c, "session_id", "", { path: "/", maxAge: 0 });
+  return c.json({ message: "登出成功" });
+});
+
 app.use("/todos/*", Middileware);
 
 // 1. 查詢全部
