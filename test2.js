@@ -5,7 +5,7 @@ const { setCookie, getCookie } = require("hono/cookie");
 const TodoModel = require("./todoModel");
 const UserModel = require("./userModel");
 
-// 伺服器的「保險箱」，存儲 sessionId -> { userId } 的對應關係
+// 存放 userId 對應 sessionId
 const sessionStore = new Map();
 
 // 生成隨機 sessionId 的工具
@@ -14,6 +14,21 @@ const generateSessionId = () => Math.random().toString(36).substring(2);
 const app = new Hono();
 
 app.use("*", cors());
+
+const Middileware = async (c, next) => {
+  console.log("檢查登錄認證:");
+
+  const sessionId = getCookie(c, "session_id");
+  const sessionData = sessionStore.get(sessionId);
+
+  if (!sessionData) {
+    return c.json({ error: "請先登錄" }, 401);
+  }
+
+  c.set("userId", sessionData.userId);
+
+  await next();
+};
 
 app.post("/register", async (c) => {
   try {
@@ -56,19 +71,14 @@ app.post("/login", async (c) => {
   }
 });
 
+app.use("/todos/*", Middileware);
+
 // 1. 查詢全部
 app.get("/todos", async (c) => {
-  // 拿到sessionId
-  const sessionId = getCookie(c, "session_id");
-  // 查找存在服務器sessionId 對應的 userId
-  const sessionData = sessionStore.get(sessionId);
-
-  if (!sessionData) {
-    return c.json({ error: "未登錄或 Session 已過期" }, 401);
-  }
+  const userId = c.get("userId");
 
   try {
-    const todos = await TodoModel.getAll(sessionData.userId);
+    const todos = await TodoModel.getAll(userId);
     return c.json(todos, 200);
   } catch (err) {
     return c.json({ error: "服務器出錯" }, 500);
@@ -78,19 +88,14 @@ app.get("/todos", async (c) => {
 // 2. 查詢單筆
 app.get("/todos/:id", async (c) => {
   const id = c.req.param("id");
-  const sessionId = getCookie(c, "session_id");
-  const sessionData = sessionStore.get(sessionId);
-
-  if (!sessionData) {
-    return c.json({ error: "未登錄" }, 401);
-  }
+  const userId = c.get("userId");
 
   if (isNaN(id)) {
-    return c.json({ error: "無效的 id 必須為數字" }, 400);
+    return c.json({ error: "無效的 id " }, 400);
   }
 
   try {
-    const todo = await TodoModel.get(id, sessionData.userId);
+    const todo = await TodoModel.get(id, userId);
     if (!todo) {
       return c.json({ error: "找不到該筆數據或權限不足" }, 404);
     }
@@ -102,18 +107,12 @@ app.get("/todos/:id", async (c) => {
 
 // 3. 增加數據
 app.post("/todos", async (c) => {
-  const sessionId = getCookie(c, "session_id");
-  const sessionData = sessionStore.get(sessionId);
-
-  if (!sessionData) {
-    return c.json({ error: "未登錄" }, 401);
-  }
-
+  const userId = c.get("userId");
   try {
     const { title } = await c.req.json();
     if (!title) return c.json({ error: "請提供 title" }, 400);
 
-    const newTodo = await TodoModel.create(title, sessionData.userId);
+    const newTodo = await TodoModel.create(title, userId);
     return c.json(newTodo, 201);
   } catch (err) {
     return c.json({ error: "服務器錯誤" }, 500);
@@ -123,25 +122,15 @@ app.post("/todos", async (c) => {
 // 4. 更新數據
 app.put("/todos/:id", async (c) => {
   const id = c.req.param("id");
-  const sessionId = getCookie(c, "session_id");
-  const sessionData = sessionStore.get(sessionId);
-
-  if (!sessionData) {
-    return c.json({ error: "未登錄" }, 401);
-  }
+  const userId = c.get("userId");
 
   if (isNaN(id)) {
-    return c.json({ error: "無效的 id 必須為數字" }, 400);
+    return c.json({ error: "無效的 id " }, 400);
   }
 
   try {
     const { title, is_completed } = await c.req.json();
-    const update = await TodoModel.update(
-      id,
-      title,
-      is_completed,
-      sessionData.userId
-    );
+    const update = await TodoModel.update(id, title, is_completed, userId);
     if (!update) {
       return c.json({ error: "修改失敗，可能數據不存在" }, 404);
     }
@@ -154,19 +143,14 @@ app.put("/todos/:id", async (c) => {
 // 5. 刪除數據
 app.delete("/todos/:id", async (c) => {
   const id = c.req.param("id");
-  const sessionId = getCookie(c, "session_id");
-  const sessionData = sessionStore.get(sessionId);
-
-  if (!sessionData) {
-    return c.json({ error: "未登錄或 Session 過期" }, 401);
-  }
+  const userId = c.get("userId");
 
   if (isNaN(id)) {
     return c.json({ error: "ID 格式錯誤" }, 400);
   }
 
   try {
-    const deletedTodo = await TodoModel.delete(id, sessionData.userId);
+    const deletedTodo = await TodoModel.delete(id, userId);
     if (!deletedTodo) {
       return c.json({ error: "刪除失敗" }, 404);
     }
