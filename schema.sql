@@ -1,15 +1,24 @@
--- 1. 主鍵表
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,--自動增序主鍵
-    username VARCHAR(50) UNIQUE NOT NULL,--唯一約束，不能爲空
-    password VARCHAR(255) NOT NULL  
-);
+const { pgTable, serial, varchar, boolean, timestamp, integer } = require("drizzle-orm/pg-core");
 
--- 2. 外鍵表
-CREATE TABLE todos (
-    id SERIAL PRIMARY KEY,--自動增序主鍵
-    title VARCHAR(255) NOT NULL,
-    is_completed BOOLEAN DEFAULT FALSE, --布林值，默認爲false
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,--自動填入默認的當前時間
-    user_id INTEGER NOT NULL REFERENCES users(id)--整數，不能爲空，聞聯users_id
-);
+-- 1. 定義 主鍵 users 表
+const users = pgTable("users", {
+  id: serial("id").primaryKey(), --自動增序主鍵
+  username: varchar("username", { length: 50 }).unique().notNull(), -- 唯一約束，不能爲空
+  password: varchar("password", { length: 255 }).notNull(), 
+});
+
+-- 外鍵表
+const todos = pgTable("todos", {
+  id: serial("id").primaryKey(), -- 主鍵 自動增序
+  title: varchar("title", { length: 255 }).notNull(), 
+  isCompleted: boolean("is_completed").default(false), --布林值，默認爲false
+  createdAt: timestamp("created_at").defaultNow(), -- 自動填入創建的時間
+  userId: integer("user_id") 
+    .notNull()
+    .references(() => users.id), --整數，不能爲空，關聯user_id
+});
+
+module.exports = { users, todos };
+
+
+
