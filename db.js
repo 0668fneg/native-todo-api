@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { Pool } = require("pg");
+const schema = require("./schema");
 const { drizzle } = require("drizzle-orm/node-postgres");
 
 const pool = new Pool({
@@ -10,5 +11,5 @@ const pool = new Pool({
   database: process.env.DB_NAME,
 });
 
-const db = drizzle(pool);
+const db = drizzle(pool, { schema });
 module.exports = { pool, db };
