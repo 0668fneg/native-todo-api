@@ -5,6 +5,7 @@ const { setCookie, getCookie } = require("hono/cookie");
 const { db } = require("./db");
 const { users, todos } = require("./schema");
 const { eq, and } = require("drizzle-orm");
+const XLSX = require("xlsx");
 
 const sessionStore = new Map();
 
@@ -186,6 +187,47 @@ app.delete("/todos/:id", async (c) => {
     }
     return c.json({ message: "刪除成功" }, 200);
   } catch (err) {
+    return c.json({ error: "服務器錯誤" }, 500);
+  }
+});
+
+// 導出 Excel 數據表
+app.get("/todos/export/excel", async (c) => {
+  const userId = c.get("userId");
+
+  try {
+    const allTodos = await db
+      .select()
+      .from(todos)
+      .where(eq(todos.userId, userId));
+
+    if (allTodos.length === 0) {
+      return c.json({ error: "沒有數據可導出" }, 400);
+    }
+
+    const fromattedData = allTodos.map((item) => ({
+      編號id: item.id,
+      任務標題title: item.title,
+      是否完成: item.isCompleted ? "已完成" : "未完成",
+      創建時間: new Date(item.createdAt).toLocaleString(),
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(fromattedData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "待辦事項");
+
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "buffer",
+    });
+
+    c.header(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    c.header("Content-Disposition", 'attachment; filename="todos_export.xlsx"');
+    return c.body(excelBuffer);
+  } catch (err) {
+    console.error("CSV 導出失敗:", err);
     return c.json({ error: "服務器錯誤" }, 500);
   }
 });
