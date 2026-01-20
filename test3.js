@@ -3,12 +3,13 @@ const { cors } = require("hono/cors");
 const { serve } = require("@hono/node-server");
 const { setCookie, getCookie } = require("hono/cookie");
 const { db } = require("./db");
-const { users } = require("./schema");
 const { eq } = require("drizzle-orm");
 const XLSX = require("xlsx");
 const todoModel = require("./models/todoModel"); // 引入數據層
+const userService = require("./services/userService");
+const Redis = require("ioredis");
 
-const sessionStore = new Map();
+const redis = new Redis();
 const generateSessionId = () => Math.random().toString(36).substring(2);
 
 const app = new Hono();
@@ -17,8 +18,13 @@ app.use("*", cors());
 // 中間件
 const Middileware = async (c, next) => {
   const sessionId = getCookie(c, "session_id");
-  const sessionData = sessionStore.get(sessionId);
-  if (!sessionData) return c.json({ error: "請先登錄" }, 401);
+  if (!sessionId) return c.json({ error: "請先登錄" }, 401);
+
+  const rawData = await redis.get(`session: ${sessionId}`);
+  if (!rawData) {
+    return c.json({ error: "會話已過期,請重新錄登" }, 401);
+  }
+  const sessionData = JSON.parse(rawData);
   c.set("userId", sessionData.userId);
   await next();
 };
@@ -27,17 +33,12 @@ const Middileware = async (c, next) => {
 app.post("/register", async (c) => {
   try {
     const { username, password } = await c.req.json();
-    const [existingUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username));
-    if (existingUser) return c.json({ error: "用戶名已被使用" }, 400);
-    const [newUser] = await db
-      .insert(users)
-      .values({ username, password })
-      .returning();
+    const newUser = await userService.registerUser(username, password);
     return c.json({ message: "注冊成功", userId: newUser.id }, 201);
   } catch (err) {
+    if (err.message === "用戶名已被使用") {
+      return c.json({ error: "用戶已被注冊" }, 400);
+    }
     return c.json({ error: "服務器出錯" }, 500);
   }
 });
@@ -46,23 +47,26 @@ app.post("/register", async (c) => {
 app.post("/login", async (c) => {
   try {
     const { username, password } = await c.req.json();
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username));
-    if (user && user.password === password) {
-      const sessionId = generateSessionId();
-      sessionStore.set(sessionId, { userId: user.id });
-      setCookie(c, "session_id", sessionId, {
-        path: "/",
-        httpOnly: true,
-        maxAge: 86400,
-        sameSite: "Lax",
-      });
-      return c.json({ message: "登錄成功 " });
-    }
-    return c.json({ error: "用戶名或密碼錯誤 " }, 401);
+    const user = await userService.loginUser(username, password);
+    const sessionId = generateSessionId();
+    await redis.set(
+      `session: ${sessionId}`,
+      JSON.stringify({ userId: user.id }),
+      "EX",
+      86400,
+    );
+    setCookie(c, "session_id", sessionId, {
+      path: "/",
+      httpOnly: true,
+      maxAge: 86400,
+      sameSite: "Lax",
+    });
+    return c.json({ message: "登錄成功 " }, 200);
   } catch (err) {
+    if (err.message === "用戶名不存在或密碼不正確") {
+      return c.json({ error: "用戶名或密碼錯誤 " }, 401);
+    }
+
     return c.json({ error: "服務器出錯" }, 500);
   }
 });
