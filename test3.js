@@ -2,12 +2,10 @@ const { Hono } = require("hono");
 const { cors } = require("hono/cors");
 const { serve } = require("@hono/node-server");
 const { setCookie, getCookie } = require("hono/cookie");
-const { db } = require("./db");
-const { eq } = require("drizzle-orm");
-const XLSX = require("xlsx");
-const todoModel = require("./models/todoModel"); // 引入數據層
 const userService = require("./services/userService");
+const todoService = require("./services/todoService");
 const Redis = require("ioredis");
+const { exportToExcel } = require("./utils/excel");
 
 const redis = new Redis();
 const generateSessionId = () => Math.random().toString(36).substring(2);
@@ -20,7 +18,7 @@ const Middileware = async (c, next) => {
   const sessionId = getCookie(c, "session_id");
   if (!sessionId) return c.json({ error: "請先登錄" }, 401);
 
-  const rawData = await redis.get(`session: ${sessionId}`);
+  const rawData = await redis.get(`session:${sessionId}`);
   if (!rawData) {
     return c.json({ error: "會話已過期,請重新錄登" }, 401);
   }
@@ -50,11 +48,12 @@ app.post("/login", async (c) => {
     const user = await userService.loginUser(username, password);
     const sessionId = generateSessionId();
     await redis.set(
-      `session: ${sessionId}`,
+      `session:${sessionId}`,
       JSON.stringify({ userId: user.id }),
       "EX",
       86400,
     );
+
     setCookie(c, "session_id", sessionId, {
       path: "/",
       httpOnly: true,
@@ -77,7 +76,7 @@ app.use("/todos/*", Middileware);
 app.get("/todos", async (c) => {
   const userId = c.get("userId");
   try {
-    const allTodos = await todoModel.findAll(userId);
+    const allTodos = await todoService.getAllTodos(userId);
     return c.json(allTodos, 200);
   } catch (err) {
     return c.json({ error: "服務器出錯" }, 500);
@@ -90,8 +89,8 @@ app.get("/todos/:id", async (c) => {
   const userId = c.get("userId");
   if (isNaN(id)) return c.json({ error: "ID 格式無效" }, 400);
   try {
-    const todo = await todoModel.findById(id, userId);
-    if (!todo) return c.json({ error: "找不到該筆數據" }, 404);
+    const todo = await todoService.getTodoById(id, userId);
+
     return c.json(todo, 200);
   } catch (err) {
     return c.json({ error: "服務器錯誤" }, 500);
@@ -104,7 +103,7 @@ app.post("/todos", async (c) => {
   try {
     const { title } = await c.req.json();
     if (!title) return c.json({ error: "請提供 title" }, 400);
-    const newTodo = await todoModel.create(title, userId);
+    const newTodo = await todoService.createTodo(title, userId);
     return c.json(newTodo, 201);
   } catch (err) {
     return c.json({ error: "服務器錯誤" }, 500);
@@ -118,8 +117,12 @@ app.put("/todos/:id", async (c) => {
   if (isNaN(id)) return c.json({ error: "ID 格式無效" }, 400);
   try {
     const { title, is_completed } = await c.req.json();
-    const updateTodo = await todoModel.update(id, title, is_completed, userId);
-    if (!updateTodo) return c.json({ error: "修改失敗" }, 404);
+    const updateTodo = await todoService.updateTodo(
+      id,
+      title,
+      is_completed,
+      userId,
+    );
     return c.json(updateTodo, 200);
   } catch (err) {
     return c.json({ error: "服務器錯誤" }, 500);
@@ -132,8 +135,7 @@ app.delete("/todos/:id", async (c) => {
   const userId = c.get("userId");
   if (isNaN(id)) return c.json({ error: "無效的 ID 格式" }, 400);
   try {
-    const deletedTodo = await todoModel.delete(id, userId);
-    if (!deletedTodo) return c.json({ error: "刪除失敗或權限不足" }, 404);
+    await todoService.deleteTodo(id, userId);
     return c.json({ message: "刪除成功" }, 200);
   } catch (err) {
     return c.json({ error: "服務器錯誤" }, 500);
@@ -145,12 +147,9 @@ app.get("/todos/export/excel", async (c) => {
   const userId = c.get("userId");
 
   try {
-    const allTodos = await db
-      .select()
-      .from(todos)
-      .where(eq(todos.userId, userId));
+    const allTodos = await todoService.getAllTodos(userId);
 
-    if (allTodos.length === 0) {
+    if (!allTodos || allTodos.length === 0) {
       return c.json({ error: "沒有數據可導出" }, 400);
     }
 
@@ -160,15 +159,8 @@ app.get("/todos/export/excel", async (c) => {
       是否完成: item.isCompleted ? "已完成" : "未完成",
       創建時間: new Date(item.createdAt).toLocaleString(),
     }));
-    const worksheet = XLSX.utils.json_to_sheet(fromattedData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "待辦事項");
 
-    const excelBuffer = XLSX.write(workbook, {
-      bookType: "xlsx",
-      type: "buffer",
-    });
-
+    const excelBuffer = exportToExcel(fromattedData, "待辦事項");
     c.header(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -176,7 +168,7 @@ app.get("/todos/export/excel", async (c) => {
     c.header("Content-Disposition", 'attachment; filename="todos_export.xlsx"');
     return c.body(excelBuffer);
   } catch (err) {
-    console.error("CSV 導出失敗:", err);
+    console.error("Excel 導出失敗:", err);
     return c.json({ error: "服務器錯誤" }, 500);
   }
 });
